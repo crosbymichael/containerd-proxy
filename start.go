@@ -1,15 +1,17 @@
 package main
 
 import (
-	"errors"
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/defaults"
 	"github.com/containerd/containerd/errdefs"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -46,48 +48,98 @@ func before(clix *cli.Context) error {
 
 // start a new task
 func start(clix *cli.Context) error {
-	var (
-		signals = make(chan os.Signal, 64)
-		ctx     = newContext(clix)
-		id      = clix.Args().First()
-	)
-	signal.Notify(signals)
+	id := clix.Args().First()
 	if id == "" {
 		return errors.New("container id required")
 	}
-	client, err := containerd.New(defaults.DefaultAddress)
+	code, err := runTask(newContext(clix), id)
 	if err != nil {
 		return err
+	}
+	os.Exit(code)
+	return nil
+}
+
+func runTask(ctx context.Context, id string) (int, error) {
+	var (
+		signals = make(chan os.Signal, 64)
+	)
+	signal.Notify(signals)
+	client, err := containerd.New(defaults.DefaultAddress)
+	if err != nil {
+		return -1, err
 	}
 	defer client.Close()
 	container, err := client.LoadContainer(ctx, id)
 	if err != nil {
-		return err
+		return -1, err
 	}
 	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStdio))
 	if err != nil {
-		return err
+		return -1, err
 	}
-	defer task.Delete(ctx, containerd.WithProcessKill)
 	wait, err := task.Wait(ctx)
 	if err != nil {
-		return err
+		task.Delete(ctx, containerd.WithProcessKill)
+		return -1, err
 	}
-	// handle signals
+	startErrCh := make(chan error, 1)
 	go func() {
-		for s := range signals {
+		startErrCh <- task.Start(ctx)
+	}()
+	for {
+		select {
+		case err := <-startErrCh:
+			if err != nil {
+				task.Delete(ctx, containerd.WithProcessKill)
+				return -1, err
+			}
+		case s := <-signals:
+		killAgain:
 			if err := task.Kill(ctx, s.(syscall.Signal)); err != nil {
+				if errdefs.IsUnavailable(errdefs.FromGRPC(err)) {
+					time.Sleep(100 * time.Millisecond)
+					if rerr := client.Reconnect(); rerr != nil {
+						task.Delete(ctx, containerd.WithProcessKill)
+						return -1, err
+					}
+					if task, err = getTask(ctx, client, id); err != nil {
+						return -1, err
+					}
+					goto killAgain
+				}
 				logrus.WithError(err).Error("signal lost")
 			}
+		case exit := <-wait:
+			if exit.Error() != nil {
+			waitAgain:
+				if errdefs.IsUnavailable(errdefs.FromGRPC(exit.Error())) {
+					time.Sleep(100 * time.Millisecond)
+					if rerr := client.Reconnect(); rerr != nil {
+						task.Delete(ctx, containerd.WithProcessKill)
+						return -1, errors.Wrap(err, "reconnect")
+					}
+					if task, err = getTask(ctx, client, id); err != nil {
+						return -1, errors.Wrap(err, "get task")
+					}
+					if wait, err = task.Wait(ctx); err != nil {
+						goto waitAgain
+					}
+					continue
+				}
+				task.Delete(ctx, containerd.WithProcessKill)
+				return -1, exit.Error()
+			}
+			task.Delete(ctx, containerd.WithProcessKill)
+			return int(exit.ExitCode()), nil
 		}
-	}()
+	}
+}
 
-	if err := task.Start(ctx); err != nil {
-		return err
+func getTask(ctx context.Context, client *containerd.Client, id string) (containerd.Task, error) {
+	container, err := client.LoadContainer(ctx, id)
+	if err != nil {
+		return nil, err
 	}
-	exit := <-wait
-	if exit.Error() != nil {
-		return exit.Error()
-	}
-	return cli.NewExitError(nil, int(exit.ExitCode()))
+	return container.Task(ctx, cio.NewAttach(cio.WithStdio))
 }
