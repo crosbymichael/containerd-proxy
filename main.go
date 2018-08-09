@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -11,7 +12,9 @@ import (
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/defaults"
 	"github.com/containerd/containerd/errdefs"
+	"github.com/containerd/containerd/images/oci"
 	"github.com/containerd/containerd/namespaces"
+	"github.com/crosbymichael/boss/flux"
 )
 
 type exitError struct {
@@ -26,10 +29,14 @@ func main() {
 	var (
 		id      = getID()
 		signals = make(chan os.Signal, 64)
-		ctx     = namespaces.WithNamespace(context.Background(), "com.docker")
 	)
+	config, err := loadConfig(id)
+	if err != nil {
+		exit(err)
+	}
+	ctx := namespaces.WithNamespace(context.Background(), config.Namespace)
 	signal.Notify(signals)
-	if err := proxy(ctx, id, signals); err != nil {
+	if err := proxy(ctx, config, signals); err != nil {
 		if eerr, ok := err.(*exitError); ok {
 			os.Exit(eerr.Status)
 		}
@@ -37,18 +44,21 @@ func main() {
 	}
 }
 
-func proxy(ctx context.Context, id string, signals chan os.Signal) error {
+func proxy(ctx context.Context, config *Config, signals chan os.Signal) error {
 	client, err := containerd.New(defaults.DefaultAddress)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
-	container, err := client.LoadContainer(ctx, id)
+	container, err := client.LoadContainer(ctx, config.ID)
 	if err != nil {
 		if !errdefs.IsNotFound(err) {
 			return err
 		}
 		// create new container
+		if container, err = create(ctx, client, config); err != nil {
+			return err
+		}
 	}
 	// cleanup old task if it is still hangin around
 	if err := cleanup(ctx, container); err != nil {
@@ -100,6 +110,40 @@ func proxy(ctx context.Context, id string, signals chan os.Signal) error {
 			}
 		}
 	}
+}
+
+func create(ctx context.Context, client *containerd.Client, config *Config) (containerd.Container, error) {
+	image, err := client.GetImage(ctx, config.Image)
+	if err != nil {
+		if !errdefs.IsNotFound(err) {
+			return nil, err
+		}
+		// we don't have the image so check if we have a bundle
+		switch {
+		case config.ImagePath != "":
+			importer := &oci.V1Importer{
+				ImageName: config.Image,
+			}
+			f, err := os.Open(config.ImagePath)
+			if err != nil {
+				return nil, err
+			}
+			images, err := client.Import(ctx, importer, f)
+			f.Close()
+			if err != nil {
+				return nil, err
+			}
+			if len(images) != 1 {
+				return nil, errors.New("no image imported")
+			}
+			image = images[0]
+		default:
+			if image, err = client.Pull(ctx, config.Image, containerd.WithPullUnpack); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return client.NewContainer(ctx, config.ID, WithCurrentSpec, flux.WithNewSnapshot(image))
 }
 
 func exit(err error) {
