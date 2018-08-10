@@ -45,7 +45,10 @@ func main() {
 }
 
 func proxy(ctx context.Context, config *Config, signals chan os.Signal) error {
-	client, err := containerd.New(defaults.DefaultAddress)
+	client, err := containerd.New(
+		defaults.DefaultAddress,
+		containerd.WithDefaultRuntime("io.containerd.process.v1"),
+	)
 	if err != nil {
 		return err
 	}
@@ -72,7 +75,7 @@ func proxy(ctx context.Context, config *Config, signals chan os.Signal) error {
 	if err != nil {
 		return err
 	}
-	defer task.Delete(ctx, containerd.WithProcessKill)
+	defer task.Delete(ctx)
 
 	wait, err := task.Wait(ctx)
 	if err != nil {

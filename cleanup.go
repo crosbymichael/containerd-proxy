@@ -15,6 +15,6 @@ func cleanup(ctx context.Context, container containerd.Container) error {
 		}
 		return err
 	}
-	_, err = task.Delete(ctx, containerd.WithProcessKill)
+	_, err = task.Delete(ctx)
 	return err
 }

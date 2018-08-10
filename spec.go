@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"path/filepath"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/containers"
@@ -11,13 +12,8 @@ import (
 )
 
 func WithCurrentSpec(ctx context.Context, client *containerd.Client, c *containers.Container) error {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
 	s, err := oci.GenerateSpec(ctx, client, c,
-		oci.WithProcessArgs(os.Args[0:]...),
-		oci.WithProcessCwd(cwd),
+		oci.WithProcessArgs(append([]string{filepath.Base(os.Args[0])}, os.Args[1:]...)...),
 		oci.WithEnv(os.Environ()),
 	)
 	if err != nil {
