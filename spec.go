@@ -11,15 +11,21 @@ import (
 	"github.com/containerd/typeurl"
 )
 
-func WithCurrentSpec(ctx context.Context, client *containerd.Client, c *containers.Container) error {
-	s, err := oci.GenerateSpec(ctx, client, c,
-		oci.WithProcessArgs(append([]string{filepath.Base(os.Args[0])}, os.Args[1:]...)...),
-		oci.WithEnv(os.Environ()),
-	)
-	if err != nil {
+func WithCurrentSpec(config *Config) func(ctx context.Context, client *containerd.Client, c *containers.Container) error {
+	return func(ctx context.Context, client *containerd.Client, c *containers.Container) error {
+		args := append([]string{
+			filepath.Base(os.Args[0]),
+		}, config.Args...)
+		args = append(args, os.Args[1:]...)
+		s, err := oci.GenerateSpec(ctx, client, c,
+			oci.WithProcessArgs(args...),
+			oci.WithEnv(os.Environ()),
+		)
+		if err != nil {
+			return err
+		}
+		s.Linux.Resources.Devices = nil
+		c.Spec, err = typeurl.MarshalAny(s)
 		return err
 	}
-	s.Linux.Resources.Devices = nil
-	c.Spec, err = typeurl.MarshalAny(s)
-	return err
 }
