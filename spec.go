@@ -19,6 +19,7 @@ func WithCurrentSpec(ctx context.Context, client *containerd.Client, c *containe
 	if err != nil {
 		return err
 	}
+	s.Linux.Resources.Devices = nil
 	c.Spec, err = typeurl.MarshalAny(s)
 	return err
 }
