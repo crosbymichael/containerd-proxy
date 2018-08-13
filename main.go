@@ -68,7 +68,7 @@ func proxy(ctx context.Context, config *Config, signals chan os.Signal) error {
 		return err
 	}
 	// update container with new spec for current run
-	if err := container.Update(ctx, WithCurrentSpec); err != nil {
+	if err := container.Update(ctx, WithCurrentSpec(config)); err != nil {
 		return err
 	}
 	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStdio))
@@ -149,7 +149,7 @@ func create(ctx context.Context, client *containerd.Client, config *Config) (con
 			}
 		}
 	}
-	return client.NewContainer(ctx, config.ID, WithCurrentSpec, flux.WithNewSnapshot(image))
+	return client.NewContainer(ctx, config.ID, WithCurrentSpec(config), flux.WithNewSnapshot(image))
 }
 
 func exit(err error) {

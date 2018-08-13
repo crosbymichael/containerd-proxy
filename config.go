@@ -7,10 +7,11 @@ import (
 )
 
 type Config struct {
-	ID        string `json:"-"`
-	Namespace string `json:"namespace"`
-	Image     string `json:"image"`
-	ImagePath string `json:"imagePath"`
+	ID        string   `json:"-"`
+	Namespace string   `json:"namespace"`
+	Image     string   `json:"image"`
+	ImagePath string   `json:"imagePath"`
+	Args      []string `json:"args"`
 }
 
 func loadConfig(id string) (*Config, error) {
