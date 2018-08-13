@@ -140,6 +140,9 @@ func create(ctx context.Context, client *containerd.Client, config *Config) (con
 				return nil, errors.New("no image imported")
 			}
 			image = images[0]
+			if err := image.Unpack(ctx, containerd.DefaultSnapshotter); err != nil {
+				return nil, err
+			}
 		default:
 			if image, err = client.Pull(ctx, config.Image, containerd.WithPullUnpack); err != nil {
 				return nil, err
