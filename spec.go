@@ -29,3 +29,13 @@ func WithCurrentSpec(config *Config) func(ctx context.Context, client *container
 		return err
 	}
 }
+
+func WithScope(scope string) func(ctx context.Context, client *containerd.Client, c *containers.Container) error {
+	return func(ctx context.Context, client *containerd.Client, c *containers.Container) error {
+		if c.Labels == nil {
+			c.Labels = make(map[string]string)
+		}
+		c.Labels[ScopeLabel] = scope
+		return nil
+	}
+}

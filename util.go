@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -49,4 +51,21 @@ func reconnect(client *containerd.Client) (err error) {
 
 func isUnavailable(err error) bool {
 	return errdefs.IsUnavailable(errdefs.FromGRPC(err))
+}
+
+type exitError struct {
+	Status int
+}
+
+func (e *exitError) Error() string {
+	return fmt.Sprintf("exit status %d", e.Status)
+}
+
+func exit(err error) {
+	fmt.Fprintln(os.Stderr, err)
+	os.Exit(1)
+}
+
+func getID() string {
+	return filepath.Base(os.Args[0])
 }
