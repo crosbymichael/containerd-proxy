@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -15,7 +16,7 @@ type Config struct {
 }
 
 func loadConfig(id string) (*Config, error) {
-	f, err := os.Open(filepath.Join("/etc/containerd-proxy", id))
+	f, err := os.Open(filepath.Join("/etc/containerd-proxy", fmt.Sprintf("%s.json", id)))
 	if err != nil {
 		return nil, err
 	}
