@@ -17,6 +17,10 @@ import (
 	"github.com/crosbymichael/boss/flux"
 )
 
+var (
+	NoUpdateLabel = "noupdate"
+)
+
 type exitError struct {
 	Status int
 }
@@ -67,9 +71,17 @@ func proxy(ctx context.Context, config *Config, signals chan os.Signal) error {
 	if err := cleanup(ctx, container); err != nil {
 		return err
 	}
-	// update container with new spec for current run
-	if err := container.Update(ctx, WithCurrentSpec(config)); err != nil {
+	var labels map[string]string
+	if labels, err = container.Labels(ctx); err != nil {
 		return err
+	}
+
+	// Only update the configuration if the noupdate label is not present
+	if _, ok := labels[NoUpdateLabel]; !ok {
+		// update container with new spec for current run
+		if err := container.Update(ctx, WithCurrentSpec(config)); err != nil {
+			return err
+		}
 	}
 	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStdio))
 	if err != nil {
