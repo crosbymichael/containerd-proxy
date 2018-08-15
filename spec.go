@@ -20,11 +20,11 @@ func WithCurrentSpec(config *Config) func(ctx context.Context, client *container
 		s, err := oci.GenerateSpec(ctx, client, c,
 			oci.WithProcessArgs(args...),
 			oci.WithEnv(os.Environ()),
+			oci.WithParentCgroupDevices,
 		)
 		if err != nil {
 			return err
 		}
-		s.Linux.Resources.Devices = nil
 		c.Spec, err = typeurl.MarshalAny(s)
 		return err
 	}
