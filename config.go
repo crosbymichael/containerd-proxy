@@ -98,3 +98,10 @@ func (c *Config) GetImage(ctx context.Context, client *containerd.Client) (conta
 	}
 	return image, nil
 }
+
+func (c *Config) GetArgs() []string {
+	args := append([]string{
+		filepath.Base(os.Args[0]),
+	}, c.Args...)
+	return append(args, os.Args[1:]...)
+}
