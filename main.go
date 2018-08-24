@@ -24,6 +24,12 @@ func main() {
 	}
 	ctx := namespaces.WithNamespace(context.Background(), config.Namespace)
 	signal.Notify(signals)
+	if len(os.Args) == 2 && os.Args[1] == "post-stop" {
+		if err := cleanup(ctx, id); err != nil {
+			exit(err)
+		}
+		return
+	}
 	if err := proxy(ctx, config, signals); err != nil {
 		if eerr, ok := err.(*exitError); ok {
 			os.Exit(eerr.Status)
@@ -59,8 +65,7 @@ func proxy(ctx context.Context, config *Config, signals chan os.Signal) error {
 			return err
 		}
 	}
-	// cleanup old task if it is still hangin around
-	if err := cleanup(ctx, container); err != nil {
+	if err := checkRunning(ctx, container); err != nil {
 		return err
 	}
 	// update container with new spec for current run
