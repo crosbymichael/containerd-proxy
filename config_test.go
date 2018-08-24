@@ -31,8 +31,8 @@ var upgrades = []struct {
 			Image: "ee02",
 			Scope: AnyScope,
 		},
-		ContainerScope: "ee",
-		ContainerImage: "ee03",
+		ContainerScope: AnyScope,
+		ContainerImage: "ee01",
 		Upgrade:        true,
 	},
 	{
@@ -40,16 +40,7 @@ var upgrades = []struct {
 			Image: "ee02",
 			Scope: AnyScope,
 		},
-		ContainerScope: "ee",
-		ContainerImage: "ee02",
-		Upgrade:        false,
-	},
-	{
-		Config: Config{
-			Image: "ce01",
-			Scope: "ce",
-		},
-		ContainerScope: "ee",
+		ContainerScope: AnyScope,
 		ContainerImage: "ee02",
 		Upgrade:        false,
 	},
@@ -60,7 +51,7 @@ var upgrades = []struct {
 		},
 		ContainerScope: AnyScope,
 		ContainerImage: "ee02",
-		Upgrade:        true,
+		Upgrade:        false,
 	},
 }
 
