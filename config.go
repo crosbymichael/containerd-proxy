@@ -45,18 +45,13 @@ type Config struct {
 // ShouldUpgrade matches the scope and image for a container to decide if an upgrade is required
 func (c *Config) ShouldUpgrade(containerImage, containerScope string) bool {
 	if c.Image != containerImage {
-		switch {
-		case containerScope == "":
-			return true
-		case containerScope == AnyScope:
-			return true
-		case c.Scope == AnyScope:
-			return true
-		case containerScope == c.Scope:
-			return true
-		default:
+		if containerScope == AnyScope && c.Scope != containerScope {
 			return false
 		}
+		if containerScope == "" {
+			return true
+		}
+		return c.Scope == AnyScope
 	}
 	return false
 }
