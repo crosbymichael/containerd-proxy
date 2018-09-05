@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
@@ -11,6 +12,7 @@ import (
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/crosbymichael/boss/flux"
+	"golang.org/x/sys/unix"
 )
 
 func main() {
@@ -42,11 +44,11 @@ func proxy(ctx context.Context, config *Config, signals chan os.Signal) error {
 	client, err := containerd.New(
 		defaults.DefaultAddress,
 		containerd.WithDefaultRuntime("io.containerd.process.v1"),
+		containerd.WithTimeout(1*time.Second),
 	)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
 	container, err := client.LoadContainer(ctx, config.ID)
 	if err != nil {
 		if !errdefs.IsNotFound(err) {
@@ -92,10 +94,10 @@ func proxy(ctx context.Context, config *Config, signals chan os.Signal) error {
 	if err != nil {
 		return err
 	}
-	defer task.Delete(ctx)
 
 	wait, err := task.Wait(ctx)
 	if err != nil {
+		task.Delete(ctx)
 		return err
 	}
 	started := make(chan error, 1)
@@ -109,15 +111,20 @@ func proxy(ctx context.Context, config *Config, signals chan os.Signal) error {
 				return err
 			}
 		case s := <-signals:
+			if s == unix.SIGCONT {
+				continue
+			}
 			if err := trySendSignal(ctx, client, task, s); err != nil {
 				return err
 			}
 		case exit := <-wait:
 			if exit.Error() != nil {
 				if !isUnavailable(err) {
+					unix.Kill(int(task.Pid()), unix.SIGKILL)
 					return err
 				}
-				if err := reconnect(client); err != nil {
+				if client, task, err = reconnect(ctx, config.ID); err != nil {
+					unix.Kill(int(task.Pid()), unix.SIGKILL)
 					return err
 				}
 				if wait, err = task.Wait(ctx); err != nil {
@@ -125,6 +132,7 @@ func proxy(ctx context.Context, config *Config, signals chan os.Signal) error {
 				}
 				continue
 			}
+			task.Delete(ctx)
 			return &exitError{
 				Status: int(exit.ExitCode()),
 			}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
+	"github.com/containerd/containerd/defaults"
 	"github.com/containerd/containerd/errdefs"
 	"golang.org/x/sys/unix"
 )
@@ -23,30 +24,30 @@ func getTask(ctx context.Context, client *containerd.Client, id string) (contain
 }
 
 func trySendSignal(ctx context.Context, client *containerd.Client, task containerd.Task, s os.Signal) error {
-	for i := 0; i < 5; i++ {
-		err := task.Kill(ctx, s.(syscall.Signal))
-		if err == nil {
-			return nil
-		}
-		if !isUnavailable(err) {
-			return err
-		}
-		if err := reconnect(client); err != nil {
-			return err
-		}
+	err := task.Kill(ctx, s.(syscall.Signal))
+	if err == nil {
+		return nil
 	}
-	// fallback to get this signal sent
+	if !isUnavailable(err) {
+		return err
+	}
 	return unix.Kill(int(task.Pid()), s.(syscall.Signal))
 }
 
-func reconnect(client *containerd.Client) (err error) {
-	for i := 0; i < 20; i++ {
-		time.Sleep(100 * time.Millisecond)
-		if err = client.Reconnect(); err == nil {
-			return nil
-		}
+func reconnect(ctx context.Context, id string) (*containerd.Client, containerd.Task, error) {
+	client, err := containerd.New(
+		defaults.DefaultAddress,
+		containerd.WithDefaultRuntime("io.containerd.process.v1"),
+		containerd.WithTimeout(1*time.Second),
+	)
+	if err != nil {
+		return nil, nil, err
 	}
-	return err
+	t, err := getTask(ctx, client, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	return client, t, nil
 }
 
 func isUnavailable(err error) bool {

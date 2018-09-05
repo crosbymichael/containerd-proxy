@@ -17,13 +17,14 @@ func cleanup(ctx context.Context, id string) error {
 	client, err := containerd.New(
 		defaults.DefaultAddress,
 		containerd.WithDefaultRuntime("io.containerd.process.v1"),
+		containerd.WithTimeout(1*time.Second),
 	)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
 
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	container, err := client.LoadContainer(ctx, id)
