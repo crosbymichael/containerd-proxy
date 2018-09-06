@@ -53,6 +53,15 @@ var upgrades = []struct {
 		ContainerImage: "ee02",
 		Upgrade:        false,
 	},
+	{
+		Config: Config{
+			Image: "ce01",
+			Scope: "ce",
+		},
+		ContainerScope: "ce",
+		ContainerImage: "ce02",
+		Upgrade:        true,
+	},
 }
 
 func TestUpgrades(t *testing.T) {
